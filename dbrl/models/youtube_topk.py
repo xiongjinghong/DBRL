@@ -95,6 +95,7 @@ class Reinforce(nn.Module):
             policy_logp = policy_out.output
 
             beta_action = self.beta(state.detach())
+            # beta 网络学习数据中 action 分布
             beta_out = self.softmax_loss(beta_action, data["action"])
             beta_logp = beta_out.output
         else:
@@ -105,6 +106,7 @@ class Reinforce(nn.Module):
             beta_logp = (b_logp[:, data["action"]]).detach()
 
         importance_weight = self._compute_weight(policy_logp, beta_logp)
+        # importance_weight: 如果两个概率差的比较远, weight 就会变小
         lambda_k = self._compute_lambda_k(policy_logp)
 
         policy_loss = -(
