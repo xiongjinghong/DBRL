@@ -48,6 +48,7 @@ class BCQ(nn.Module):
         self.item_embeds = torch.as_tensor(item_embeds).to(device)
 
     def update(self, data):
+        #1、训练 VAE 生成器（模仿历史动作）
         generator_loss, state, mean, std = self._compute_generator_loss(
             data, self.item_embeds[data["action"]])
         state_copy = state.detach().clone()
@@ -55,20 +56,25 @@ class BCQ(nn.Module):
         generator_loss.backward()
         self.gen_optim.step()
 
+       #2、训练双Q网络
         critic_loss, y, q1, q2 = self._compute_critic_loss(data)
         self.critic_optim.zero_grad()
         critic_loss.backward()
         # torch.nn.utils.clip_grad_norm_(self.critic.parameters(), 0.5, 2)
         self.critic_optim.step()
 
+
+        #3、延迟更新策略（Actor/扰动网络）
         if self.policy_delay <= 1 or (
                 self.policy_delay > 1 and self.step % self.policy_delay == 0
         ):
+            # 更新扰动网络
             perturb_loss, action = self._compute_perturb_loss(state_copy)
             self.pert_optim.zero_grad()
             perturb_loss.backward()
             self.pert_optim.step()
 
+            #4、软更新目标网络, 缓慢复制到目标网络
             with torch.no_grad():
                 self.soft_update(self.perturbator, self.perturbator_targ)
                 self.soft_update(self.critic1, self.critic1_targ)
@@ -118,6 +124,7 @@ class BCQ(nn.Module):
 
     def _compute_generator_loss(self, data, action):
         state, recon, mean, std = self.generator(data, action)
+        #用户状态向量、重建动作、均值、方差
         recon_loss = F.mse_loss(recon, action)
         kl_div = -0.5 * (
                 1 + torch.log(std.pow(2)) - mean.pow(2) - std.pow(2)
