@@ -37,6 +37,7 @@ class DDPG(nn.Module):
         self.item_embeds = torch.as_tensor(item_embeds).to(device)
 
     def update(self, data):
+        #1、训练critic 网络
         critic_loss, y, q = self._compute_critic_loss(data)
         self.critic_optim.zero_grad()
         critic_loss.backward()
@@ -45,13 +46,14 @@ class DDPG(nn.Module):
 
         if self.policy_delay <= 1 or (
                 self.policy_delay > 1 and self.step % self.policy_delay == 0
-        ):
+        ):  #2、延迟更新策略 actor 网络
             actor_loss, action = self._compute_actor_loss(data)
             self.actor_optim.zero_grad()
             actor_loss.backward()
             self.actor_optim.step()
 
             with torch.no_grad():
+                #3、 软更新目标网络
                 self.soft_update(self.actor, self.actor_targ)
                 self.soft_update(self.critic, self.critic_targ)
         else:
